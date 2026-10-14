@@ -35,22 +35,6 @@ enum LocalChat {
         return s
     }
 
-    // MARK: SSE parsing
-
-    /// Parses `delta.content` from one OpenAI-SSE event line.
-    /// Returns nil for non-data lines, `[DONE]`, missing or null content.
-    static func parseSSEDelta(_ line: String) -> String? {
-        guard line.hasPrefix("data: ") else { return nil }
-        let payload = String(line.dropFirst(6))
-        guard payload != "[DONE]" else { return nil }
-        guard let data = payload.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let delta = choices.first?["delta"] as? [String: Any],
-              let content = delta["content"] as? String else { return nil }
-        return content
-    }
-
     // MARK: Think-block filtering
 
     /// Removes completed `<think>…</think>` blocks (reasoning models like DeepSeek-R1).
@@ -77,12 +61,14 @@ enum LocalChat {
 
     /// Fetches models, returning `.success([])` when the server responds but has no chat models,
     /// vs `.failure(.serverUnreachable)` when the server is not reachable.
-    static func fetchModelsResult(baseURL: String) async -> Result<[(id: String, label: String)], LocalChatError> {
-        guard let url = URL(string: "\(baseURL)/v1/models") else {
+    /// `baseURL` is the full prefix including `/v1`; `apiKey == nil` sends no
+    /// Authorization header (Ollama and LM Studio authenticate nothing).
+    static func fetchModelsResult(baseURL: String, apiKey: String? = nil) async -> Result<[(id: String, label: String)], LocalChatError> {
+        guard let url = URL(string: "\(baseURL)/models") else {
             return .failure(.serverUnreachable(baseURL))
         }
         var req = URLRequest(url: url, timeoutInterval: 5)
-        req.setValue("Bearer ollama", forHTTPHeaderField: "Authorization")
+        if let apiKey { req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
         do {
             let (data, response) = try await URLSession.shared.data(for: req)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200,
@@ -103,10 +89,10 @@ enum LocalChat {
         }
     }
 
-    /// Fetches models from a local OpenAI-compatible server (`GET /v1/models`).
+    /// Fetches models from a local OpenAI-compatible server (`GET /models`).
     /// Filters out embedding and non-chat models (nomic-embed, bge, clip, rerank…).
-    static func fetchModels(baseURL: String) async -> [(id: String, label: String)] {
-        if case .success(let models) = await fetchModelsResult(baseURL: baseURL) { return models }
+    static func fetchModels(baseURL: String, apiKey: String? = nil) async -> [(id: String, label: String)] {
+        if case .success(let models) = await fetchModelsResult(baseURL: baseURL, apiKey: apiKey) { return models }
         return []
     }
 
@@ -115,7 +101,8 @@ enum LocalChat {
     /// Sends a conversation to a local OpenAI-compatible server and streams the reply.
     ///
     /// - Parameters:
-    ///   - baseURL: Base URL of the server (e.g. `http://localhost:11434`).
+    ///   - baseURL: Base URL of the server including `/v1` (e.g. `http://localhost:11434/v1`).
+    ///   - apiKey: Optional bearer key; nil sends no Authorization header.
     ///   - model: Model identifier.
     ///   - messages: OpenAI-format message array (`[{"role":…,"content":…}]`).
     ///   - onToken: Called on the **main actor** with the current visible text after
@@ -128,6 +115,7 @@ enum LocalChat {
         baseURL: String,
         model: String,
         messages: [[String: Any]],
+        apiKey: String? = nil,
         onToken: @MainActor @escaping (String) -> Void
     ) async throws -> String {
         let body: [String: Any] = [
@@ -137,23 +125,24 @@ enum LocalChat {
             "max_tokens": 4096,
         ]
         let bodyData = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
-        return try await streamChat(baseURL: baseURL, encodedBody: bodyData, model: model, onToken: onToken)
+        return try await streamChat(baseURL: baseURL, encodedBody: bodyData, model: model, apiKey: apiKey, onToken: onToken)
     }
 
     static func streamChat(
         baseURL: String,
         encodedBody: Data,
         model: String,
+        apiKey: String? = nil,
         onToken: @MainActor @escaping (String) -> Void
     ) async throws -> String {
-        guard let url = URL(string: "\(baseURL)/v1/chat/completions") else {
+        guard let url = URL(string: "\(baseURL)/chat/completions") else {
             throw LocalChatError.serverUnreachable(baseURL)
         }
 
         var req = URLRequest(url: url, timeoutInterval: 300)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("Bearer ollama", forHTTPHeaderField: "Authorization")
+        if let apiKey { req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
         req.httpBody = encodedBody
 
         let bytes: URLSession.AsyncBytes
@@ -186,7 +175,8 @@ enum LocalChat {
         let minInterval: TimeInterval = 1.0 / 15.0
         do {
             for try await line in bytes.lines {
-                guard let delta = parseSSEDelta(line) else { continue }
+                guard let event = OpenAIConverter.parseSSEEvent(line),
+                      let delta = event.text else { continue }
                 accumulated += delta
                 let now = Date()
                 if now.timeIntervalSince(lastUpdate) >= minInterval {

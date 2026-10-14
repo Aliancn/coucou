@@ -132,6 +132,35 @@ final class BrainGoldenTests: XCTestCase {
         try assertGolden(try XCTUnwrap(canonicalJSONString(from: openai)), "request-openai.golden")
     }
 
+    // MARK: Known degradation — remote OpenAI files (P3c replaces it)
+
+    /// The remote OpenAI path sends only the file's name today: the App layer
+    /// builds the user text without the content, and on top of that the
+    /// converter keeps only the FIRST text block of a user turn and drops
+    /// image/document blocks. Pinned here as-is — this is a known degradation,
+    /// and P3c's tool-based file reading replaces the whole mechanism, so
+    /// fixing it now would be work P3c throws away.
+    func testRemoteOpenAIFileInliningDegradation() throws {
+        // A dropped PDF as the Anthropic path sends it: document block, then
+        // the filename text, then the query.
+        let withFileBlocks = BrainMessage(role: .user, blocks: [
+            .document(mediaType: "application/pdf", base64: "cGRm"),
+            .image(mediaType: "image/png", base64: "aW1hZ2U="),
+            .text("File: report.pdf"),
+            .text("Que dis ce document ?"),
+        ])
+        // What the remote OpenAI path sends instead: the filename only.
+        let filenameOnly = BrainMessage(role: .user, blocks: [
+            .text("File: report.pdf"),
+        ])
+        func body(_ message: BrainMessage) throws -> String {
+            let request = CompletionRequest(system: "Tu es Mochi.", messages: [message], timeout: 30)
+            return try XCTUnwrap(canonicalJSONString(
+                from: OpenAIConverter.requestBody(request, model: "gpt-4o")))
+        }
+        XCTAssertEqual(try body(withFileBlocks), try body(filenameOnly))
+    }
+
     // MARK: Shape tier — web-search structural fingerprints
 
     func testWebSearchShapes() throws {

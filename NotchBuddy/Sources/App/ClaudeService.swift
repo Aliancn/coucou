@@ -198,11 +198,15 @@ final class ClaudeService {
         let provider = state.chatProvider
         guard provider != .anthropic else { return }
 
+        // Full prefix including /v1 — normaliseURL strips it for storage,
+        // LocalChat and the endpoints expect it back.
         let baseURL: String
         if provider == .ollama {
-            baseURL = LocalChat.normaliseURL(state.ollamaServerURL)
+            baseURL = LocalChat.normaliseURL(state.ollamaServerURL) + "/v1"
         } else if provider == .lmstudio {
-            baseURL = LocalChat.normaliseURL(state.lmstudioServerURL)
+            baseURL = LocalChat.normaliseURL(state.lmstudioServerURL) + "/v1"
+        } else if provider == .custom {
+            baseURL = state.customChatBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         } else {
             switch provider {
             case .google:    baseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
@@ -210,7 +214,7 @@ final class ClaudeService {
             case .deepseek:  baseURL = "https://api.deepseek.com/v1"
             case .qwen:      baseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
             case .moonshot:  baseURL = "https://api.moonshot.cn/v1"
-            case .anthropic, .ollama, .lmstudio: baseURL = ""
+            case .anthropic, .ollama, .lmstudio, .custom: baseURL = ""
             }
         }
 
@@ -218,21 +222,31 @@ final class ClaudeService {
             if provider.isLocal {
                 let name = provider == .ollama ? "Ollama" : "LM Studio"
                 await showError("Connect \(name) in Settings → Chat first.", state: state)
+            } else if provider == .custom {
+                await showError("Set a Custom endpoint in Settings → Chat first.", state: state)
             }
             return
         }
         guard let url = URL(string: "\(baseURL)/chat/completions") else { return }
+        if provider == .custom, state.activeChatModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await showError("Pick a model for the Custom endpoint in Settings → Chat.", state: state)
+            return
+        }
 
-        // Auth header
-        let authHeader: String
-        if provider.isLocal {
-            authHeader = "Bearer ollama"
+        // Auth: local servers send nothing; custom endpoints authenticate
+        // optionally (empty key = no header); the others require a key.
+        let apiKey: String?
+        if provider == .custom {
+            let key = KeychainStore.shared.get(provider.keychainKey) ?? ""
+            apiKey = key.isEmpty ? nil : key
+        } else if provider.isLocal {
+            apiKey = nil
         } else {
             guard let key = KeychainStore.shared.get(provider.keychainKey), !key.isEmpty else {
                 await showError("\(provider.displayName) API key missing. Configure it in Settings.", state: state)
                 return
             }
-            authHeader = "Bearer \(key)"
+            apiKey = key
         }
 
         // Build messages
@@ -274,7 +288,7 @@ final class ClaudeService {
         msgs.append(["role": "user", "content": userText])
         conversationMessages.append(["role": "user", "content": userText])
 
-        let useStream = provider.isLocal || provider == .deepseek || provider == .qwen || provider == .moonshot
+        let useStream = provider.isLocal || provider == .deepseek || provider == .qwen || provider == .moonshot || provider == .custom
         var body: [String: Any] = [
             "model": state.activeChatModel,
             "max_tokens": 4096,
@@ -285,7 +299,9 @@ final class ClaudeService {
         var req = URLRequest(url: url, timeoutInterval: useStream ? 120 : 30)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        if let apiKey {
+            req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         if useStream {
@@ -306,7 +322,8 @@ final class ClaudeService {
                 let final = try await LocalChat.streamChat(
                     baseURL: baseURL,
                     encodedBody: encodedBody,
-                    model: modelCopy
+                    model: modelCopy,
+                    apiKey: apiKey
                 ) { [state, msgId] visible in
                     if !visible.isEmpty, state.stateOverride == .thinking {
                         state.stateOverride = nil   // hide typing dots on first visible text
@@ -375,57 +392,6 @@ final class ClaudeService {
                 conversationMessages.removeLast()
                 await showError(error.localizedDescription, state: state)
             }
-        }
-    }
-
-    // MARK: - Structured search (M8 — window attach + web search)
-
-    func search(query: String, context: PromptContext?, state: AppState) async {
-        guard let key = apiKey, !key.isEmpty else {
-            await showError("Anthropic API key missing. Open settings to configure it.", state: state)
-            return
-        }
-
-        var userContent: [[String: Any]] = []
-        switch context {
-        case .window(let appName, let title, let url):
-            var text = "App: \(appName)\nWindow title: \(title)"
-            if let url = url { text += "\nURL: \(url)" }
-            text += "\n\nRequest: \(query)"
-            userContent.append(["type": "text", "text": text])
-        case .file(let name, let fileURL):
-            if let fileURL = fileURL, let fileBlock = readFileAsBlock(url: fileURL) {
-                userContent.append(fileBlock)
-            }
-            userContent.append(["type": "text", "text": "File: \(name)\n\nRequest: \(query)"])
-        case nil:
-            userContent.append(["type": "text", "text": query])
-        }
-
-        let system = """
-        You are an assistant built into the notch of a Mac. Reply in English, short and precise.
-        Reply ONLY with valid JSON in this exact format:
-        {"title":"...","items":[{"label":"...","detail":"...","url":"..."}],"note":"..."}
-        Maximum 3 items. "url" is optional. "note" is optional.
-        """
-
-        let tools: [[String: Any]] = [
-            ["type": "web_search_20250305", "name": "web_search", "max_uses": 3]
-        ]
-
-        let body: [String: Any] = [
-            "model": model,
-            "max_tokens": 1024,
-            "tools": tools,
-            "system": system,
-            "messages": [["role": "user", "content": userContent]],
-        ]
-
-        do {
-            let result = try await callAPI(body: body, key: key, beta: "web-search-2025-03-05")
-            await handleResult(result, state: state)
-        } catch {
-            await showError(error.localizedDescription, state: state)
         }
     }
 
@@ -569,56 +535,6 @@ final class ClaudeService {
         state.stateOverride = nil
         state.view = .prompt
         NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.happy)
-    }
-
-    // MARK: - Structured result handler
-
-    private func handleResult(_ data: Data, state: AppState) async {
-        // Extract text from Anthropic response (may contain tool_use / web_search_tool_result blocks)
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = json["content"] as? [[String: Any]],
-              let text = claudeResponseText(fromContent: content) else {
-            await showError("Unexpected API response.", state: state)
-            return
-        }
-
-        // Strip markdown code fences if present, then extract JSON object
-        let cleanText: String
-        if let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}") {
-            cleanText = String(text[start...end])
-        } else {
-            cleanText = text
-        }
-
-        // Try to parse as our JSON format
-        if let resultData = cleanText.data(using: .utf8),
-           let parsed = try? JSONSerialization.jsonObject(with: resultData) as? [String: Any] {
-            let title  = parsed["title"] as? String ?? "Result"
-            let note   = parsed["note"] as? String
-            var items: [ResultItem] = []
-            if let rawItems = parsed["items"] as? [[String: Any]] {
-                for item in rawItems.prefix(3) {
-                    items.append(ResultItem(
-                        label:  item["label"]  as? String ?? "",
-                        detail: item["detail"] as? String ?? "",
-                        url:    item["url"]    as? String
-                    ))
-                }
-            }
-            state.searchResult = SearchResult(title: title, items: items, note: note)
-        } else {
-            // Fallback: show raw text in 3-line chunks
-            let lines = cleanText.components(separatedBy: "\n").filter { !$0.isEmpty }.prefix(3)
-            state.searchResult = SearchResult(
-                title: "Claude's response",
-                items: lines.map { ResultItem(label: $0, detail: "", url: nil) },
-                note: nil
-            )
-        }
-
-        state.stateOverride = nil
-        state.view = .result
-        NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.proud)
     }
 
     private func showError(_ message: String, state: AppState) async {

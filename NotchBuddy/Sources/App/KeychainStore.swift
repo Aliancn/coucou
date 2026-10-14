@@ -67,6 +67,7 @@ final class KeychainStore: @unchecked Sendable {
         "deepseek-api-key",
         "qwen-api-key",
         "moonshot-api-key",
+        "custom-api-key",
         "resend-api-key", "resend-from",
         "n8n-url", "n8n-api-key",
         "vercel-token",

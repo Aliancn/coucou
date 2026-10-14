@@ -151,6 +151,15 @@ final class AppState: ObservableObject {
     @Published var lmstudioServerURL: String = "" {
         didSet { UserDefaults.standard.set(lmstudioServerURL, forKey: "lmstudioServerURL") }
     }
+    /// Custom OpenAI-compatible endpoint: base URL up to but not including
+    /// `/chat/completions` (e.g. `https://gateway.example.com/v1`). Empty = unset.
+    @Published var customChatBaseURL: String = "" {
+        didSet { UserDefaults.standard.set(customChatBaseURL, forKey: "customChatBaseURL") }
+    }
+    /// Model for the custom endpoint — picked from the fetched list or typed in Settings.
+    @Published var customChatModel: String = "" {
+        didSet { UserDefaults.standard.set(customChatModel, forKey: "customChatModel") }
+    }
 
     // The always-on workspace pill (default: VS Code). Persisted.
     @Published var mainPillId: String = PillCatalog.defaultMainPillId {
@@ -180,7 +189,7 @@ final class AppState: ObservableObject {
             loadingProviderModels.insert(provider)
             providerModelFetchError.removeValue(forKey: provider)
             Task {
-                let result = await LocalChat.fetchModelsResult(baseURL: normalised)
+                let result = await LocalChat.fetchModelsResult(baseURL: normalised + "/v1")
                 loadingProviderModels.remove(provider)
                 switch result {
                 case .success(let models) where models.isEmpty:
@@ -201,6 +210,31 @@ final class AppState: ObservableObject {
             }
             return
         }
+        // Custom endpoint: base URL required, API key optional (local gateways
+        // often authenticate nothing).
+        if provider == .custom {
+            let base = customChatBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !base.isEmpty else {
+                providerModelFetchError[provider] = "Set a Custom endpoint in Settings → Chat first."
+                return
+            }
+            loadingProviderModels.insert(provider)
+            providerModelFetchError.removeValue(forKey: provider)
+            Task {
+                let key = KeychainStore.shared.get(provider.keychainKey) ?? ""
+                let models = await ClaudeService.fetchOpenAICompatibleModels(baseURL: base, apiKey: key)
+                loadingProviderModels.remove(provider)
+                if models.isEmpty {
+                    providerModelFetchError[provider] = "Failed to load models. Check the endpoint URL and key."
+                } else {
+                    fetchedProviderModels[provider] = models
+                    if !models.contains(where: { $0.id == customChatModel }) {
+                        customChatModel = models.first!.id
+                    }
+                }
+            }
+            return
+        }
         // Remote providers: require API key
         guard let apiKey = KeychainStore.shared.get(provider.keychainKey), !apiKey.isEmpty else {
             providerModelFetchError[provider] = "No API key — add it in Settings."
@@ -217,7 +251,7 @@ final class AppState: ObservableObject {
             case .deepseek:  models = await ClaudeService.fetchOpenAICompatibleModels(baseURL: "https://api.deepseek.com/v1", apiKey: apiKey)
             case .qwen:      models = await ClaudeService.fetchOpenAICompatibleModels(baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey: apiKey)
             case .moonshot:  models = await ClaudeService.fetchOpenAICompatibleModels(baseURL: "https://api.moonshot.cn/v1", apiKey: apiKey)
-            case .ollama, .lmstudio: models = []  // handled above
+            case .ollama, .lmstudio, .custom: models = []  // handled above
             }
             loadingProviderModels.remove(provider)
             if models.isEmpty {
@@ -249,7 +283,7 @@ final class AppState: ObservableObject {
                     if !models.contains(where: { $0.id == moonshotChatModel }) {
                         moonshotChatModel = models.first!.id
                     }
-                case .ollama, .lmstudio: break
+                case .ollama, .lmstudio, .custom: break
                 }
             }
         }
@@ -266,6 +300,7 @@ final class AppState: ObservableObject {
         case .deepseek:  return deepseekChatModel
         case .qwen:      return qwenChatModel
         case .moonshot:  return moonshotChatModel
+        case .custom:    return customChatModel
         }
     }
 
@@ -536,6 +571,8 @@ final class AppState: ObservableObject {
         if let v = ud.string(forKey: "moonshotChatModel"), !v.isEmpty { moonshotChatModel = v }
         if let v = ud.string(forKey: "ollamaServerURL"), !v.isEmpty { ollamaServerURL = v }
         if let v = ud.string(forKey: "lmstudioServerURL"), !v.isEmpty { lmstudioServerURL = v }
+        if let v = ud.string(forKey: "customChatBaseURL"), !v.isEmpty { customChatBaseURL = v }
+        if let v = ud.string(forKey: "customChatModel"), !v.isEmpty { customChatModel = v }
         // Migrate old 60s default → 15s
         if let v = ud.object(forKey: "openOnHover") as? Bool { openOnHover = v }
         if let v = ud.object(forKey: "autoCloseInterval") as? Double {

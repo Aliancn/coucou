@@ -20,7 +20,6 @@ struct IslandViewContent: View {
         case .choose:    ChooseView(state: state)
         case .mail:      MailView(state: state)
         case .prompt:    PromptView(state: state)
-        case .searching: SearchingView(state: state)
         case .result:    ResultView(state: state)
         case .note:      NoteView(state: state)
         case .settings:  SettingsIslandView(state: state)
@@ -1512,6 +1511,7 @@ struct ModelPickerView: View {
             let visibleProviders = ChatProvider.allCases.filter { p in
                 if p == .ollama   { return !AppState.shared.ollamaServerURL.isEmpty   || state.chatProvider == .ollama }
                 if p == .lmstudio { return !AppState.shared.lmstudioServerURL.isEmpty || state.chatProvider == .lmstudio }
+                if p == .custom   { return !AppState.shared.customChatBaseURL.isEmpty || state.chatProvider == .custom }
                 return true
             }
             ChipFlowLayout(spacing: 6) {
@@ -1602,6 +1602,7 @@ struct ModelPickerView: View {
                             case .deepseek:  state.deepseekChatModel = model.id
                             case .qwen:      state.qwenChatModel = model.id
                             case .moonshot:  state.moonshotChatModel = model.id
+                            case .custom:    state.customChatModel = model.id
                             }
                             isPresented = false
                             SoundEngine.shared.play("blip")
@@ -1693,36 +1694,6 @@ struct TypingDotsView: View {
         }
         .padding(.horizontal, 2).padding(.vertical, 4)
         .onAppear { phase = true }
-    }
-}
-
-// MARK: - Searching
-
-struct SearchingView: View {
-    @ObservedObject var state: AppState
-
-    var label: String {
-        switch state.promptContext {
-        case .window(_, let title, _): return String(format: String(localized: "Claude is reading %@…"), title)
-        case .file(let name, _):       return String(format: String(localized: "Claude is reading %@…"), name)
-        case nil:                      return String(localized: "Claude is searching…")
-        }
-    }
-
-    var body: some View {
-        ZStack(alignment: .leading) {
-            CardBackground(wash: .indigo)
-
-            VStack(alignment: .leading, spacing: 8) {
-                if let ctx = state.promptContext {
-                    ContextChip(context: ctx)
-                }
-                ShimmeringText(label)
-                    .font(.system(size: 13.5))
-            }
-            .padding(.leading, 84)
-            .padding(.trailing, 16)
-        }
     }
 }
 
@@ -4817,26 +4788,6 @@ struct MailField: View {
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background(Color.white.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-}
-
-struct ShimmeringText: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-
-    var body: some View {
-        Text(text)
-            .foregroundStyle(
-                LinearGradient(
-                    stops: [
-                        .init(color: Color(hex: "#7c818a"), location: 0),
-                        .init(color: .white, location: 0.4),
-                        .init(color: Color(hex: "#7c818a"), location: 0.7)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
     }
 }
 

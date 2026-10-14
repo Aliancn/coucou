@@ -93,6 +93,9 @@ struct SettingsView: View {
     @State private var moonshotKey: String = KeychainStore.shared.get("moonshot-api-key") ?? ""
     @State private var ollamaURL:    String = AppState.shared.ollamaServerURL
     @State private var lmstudioURL:  String = AppState.shared.lmstudioServerURL
+    @State private var customURL:    String = AppState.shared.customChatBaseURL
+    @State private var customKey:    String = KeychainStore.shared.get("custom-api-key") ?? ""
+    @State private var customEndpointModel: String = AppState.shared.customChatModel
     @State private var connectingOllama:    Bool = false
     @State private var connectingLMStudio:  Bool = false
 
@@ -1117,6 +1120,37 @@ struct SettingsView: View {
                     statusMessage = "Moonshot key saved."
                 }
                 .buttonStyle(.borderedProminent)
+
+                Divider()
+
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: "#94A3B8")).frame(width: 8, height: 8)
+                    Text("Custom (OpenAI-compatible)").font(.system(size: 12, weight: .semibold))
+                }
+                TextField("https://gateway.example.com/v1", text: $customURL)
+                    .textFieldStyle(.roundedBorder)
+                SecureField("API key (optional)", text: $customKey)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Model (e.g. gpt-4o, or leave empty to pick after loading)", text: $customEndpointModel)
+                    .textFieldStyle(.roundedBorder)
+                Button(String(localized: "Save")) {
+                    var base = customURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    while base.hasSuffix("/") { base.removeLast() }
+                    if base.hasSuffix("/chat/completions") {
+                        base = String(base.dropLast("/chat/completions".count))
+                    }
+                    state.customChatBaseURL = base
+                    customURL = base
+                    state.customChatModel = customEndpointModel.trimmingCharacters(in: .whitespacesAndNewlines)
+                    KeychainStore.shared.set("custom-api-key", value: customKey)
+                    state.fetchedProviderModels[.custom] = nil
+                    state.providerModelFetchError.removeValue(forKey: .custom)
+                    statusMessage = "Custom endpoint saved."
+                }
+                .buttonStyle(.borderedProminent)
+                Text("Any server that speaks the OpenAI Chat Completions API — LiteLLM, OpenRouter, a company gateway, a local vLLM. The model list loads in the chat's model picker.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
             }
             .padding(.vertical, 4)
         }
@@ -1686,7 +1720,7 @@ struct SettingsView: View {
         }
         if provider == .ollama { connectingOllama = true } else { connectingLMStudio = true }
         statusMessage = ""
-        let result = await LocalChat.fetchModelsResult(baseURL: normalised)
+        let result = await LocalChat.fetchModelsResult(baseURL: normalised + "/v1")
         if provider == .ollama { connectingOllama = false } else { connectingLMStudio = false }
         let name = provider == .ollama ? "Ollama" : "LM Studio"
         switch result {
