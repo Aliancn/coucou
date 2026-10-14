@@ -36,7 +36,7 @@ struct OpenAIClient: LLMClient {
         }
     }
 
-    func listModels() async throws -> [String] {
+    func listModels() async throws -> [ModelListing] {
         guard let url = URL(string: endpoint.baseURL + "/models") else {
             throw BrainError.network("bad base URL: \(endpoint.baseURL)")
         }
@@ -45,7 +45,10 @@ struct OpenAIClient: LLMClient {
         let data = try await send(req, model: endpoint.model)
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let items = json["data"] as? [[String: Any]] else { throw BrainError.emptyResponse }
-        return items.compactMap { $0["id"] as? String }
+        return items.compactMap { item in
+            guard let id = item["id"] as? String else { return nil }
+            return ModelListing(id: id, created: item["created"] as? Int)
+        }
     }
 
     // MARK: Plumbing

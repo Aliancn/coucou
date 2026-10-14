@@ -19,5 +19,14 @@ protocol LLMClient: Sendable {
 
     /// Model ids as the provider lists them. Filtering heuristics (embed,
     /// rerank…) live in the App layer's catalog, not here.
-    func listModels() async throws -> [String]
+    func listModels() async throws -> [ModelListing]
+}
+
+/// One entry of the provider's model list, as the provider reports it:
+/// label is the human name when the API has one (Anthropic's display_name),
+/// created orders the list when the API provides it (OpenAI).
+struct ModelListing: Equatable, Sendable {
+    var id: String
+    var label: String? = nil
+    var created: Int? = nil
 }

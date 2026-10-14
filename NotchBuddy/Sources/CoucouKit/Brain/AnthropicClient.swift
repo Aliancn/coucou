@@ -43,7 +43,7 @@ struct AnthropicClient: LLMClient {
         }
     }
 
-    func listModels() async throws -> [String] {
+    func listModels() async throws -> [ModelListing] {
         let url = try requestURL(path: "/models?limit=100")
         var req = URLRequest(url: url, timeoutInterval: 10)
         req.setValue(version, forHTTPHeaderField: "anthropic-version")
@@ -51,7 +51,10 @@ struct AnthropicClient: LLMClient {
         let data = try await send(req)
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let items = json["data"] as? [[String: Any]] else { throw BrainError.emptyResponse }
-        return items.compactMap { $0["id"] as? String }
+        return items.compactMap { item in
+            guard let id = item["id"] as? String else { return nil }
+            return ModelListing(id: id, label: item["display_name"] as? String)
+        }
     }
 
     // MARK: Plumbing

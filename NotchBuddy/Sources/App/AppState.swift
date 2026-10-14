@@ -173,13 +173,14 @@ final class AppState: ObservableObject {
 
     /// Fetches models for `provider` if not already loaded or loading.
     /// Sets `providerModelFetchError` if the key is absent or the request fails.
+    /// The provider's wiring (base URL, auth, list filters, which Settings
+    /// field stores the choice) lives in ProviderCatalog.
     func fetchModelsIfNeeded(for provider: ChatProvider) {
         guard !loadingProviderModels.contains(provider),
               fetchedProviderModels[provider] == nil else { return }
         // Local providers: fetch from server URL (no API key needed)
         if provider.isLocal {
-            let baseURL = provider == .ollama ? ollamaServerURL : lmstudioServerURL
-            let normalised = LocalChat.normaliseURL(baseURL)
+            let normalised = ProviderCatalog.localBaseURL(for: provider, in: self)
             guard !normalised.isEmpty else {
                 providerModelFetchError[provider] = provider == .ollama
                     ? "Connect Ollama in Settings → Chat first."
@@ -189,7 +190,7 @@ final class AppState: ObservableObject {
             loadingProviderModels.insert(provider)
             providerModelFetchError.removeValue(forKey: provider)
             Task {
-                let result = await LocalChat.fetchModelsResult(baseURL: normalised + "/v1")
+                let result = await ProviderCatalog.fetchModels(for: provider, in: self)
                 loadingProviderModels.remove(provider)
                 switch result {
                 case .success(let models) where models.isEmpty:
@@ -198,11 +199,8 @@ final class AppState: ObservableObject {
                         : "No models yet. Download one in LM Studio first."
                 case .success(let models):
                     fetchedProviderModels[provider] = models
-                    let current = provider == .ollama ? ollamaChatModel : lmstudioChatModel
-                    if !models.contains(where: { $0.id == current }) {
-                        let first = models.first!.id
-                        if provider == .ollama { ollamaChatModel = first }
-                        else                   { lmstudioChatModel = first }
+                    if !models.contains(where: { $0.id == ProviderCatalog.chatModel(for: provider, in: self) }) {
+                        ProviderCatalog.setChatModel(models.first!.id, for: provider, in: self)
                     }
                 case .failure:
                     providerModelFetchError[provider] = "Cannot reach \(normalised). Is the server running?"
@@ -221,16 +219,15 @@ final class AppState: ObservableObject {
             loadingProviderModels.insert(provider)
             providerModelFetchError.removeValue(forKey: provider)
             Task {
-                let key = KeychainStore.shared.get(provider.keychainKey) ?? ""
-                let models = await ClaudeService.fetchOpenAICompatibleModels(baseURL: base, apiKey: key)
+                let result = await ProviderCatalog.fetchModels(for: provider, in: self)
                 loadingProviderModels.remove(provider)
-                if models.isEmpty {
-                    providerModelFetchError[provider] = "Failed to load models. Check the endpoint URL and key."
-                } else {
+                if case .success(let models) = result, !models.isEmpty {
                     fetchedProviderModels[provider] = models
-                    if !models.contains(where: { $0.id == customChatModel }) {
-                        customChatModel = models.first!.id
+                    if !models.contains(where: { $0.id == ProviderCatalog.chatModel(for: provider, in: self) }) {
+                        ProviderCatalog.setChatModel(models.first!.id, for: provider, in: self)
                     }
+                } else {
+                    providerModelFetchError[provider] = "Failed to load models. Check the endpoint URL and key."
                 }
             }
             return
@@ -243,65 +240,23 @@ final class AppState: ObservableObject {
         loadingProviderModels.insert(provider)
         providerModelFetchError.removeValue(forKey: provider)
         Task {
-            let models: [(id: String, label: String)]
-            switch provider {
-            case .anthropic: models = await ClaudeService.fetchModels(apiKey: apiKey)
-            case .google:    models = await ClaudeService.fetchGoogleModels(apiKey: apiKey)
-            case .openai:    models = await ClaudeService.fetchOpenAIModels(apiKey: apiKey)
-            case .deepseek:  models = await ClaudeService.fetchOpenAICompatibleModels(baseURL: "https://api.deepseek.com/v1", apiKey: apiKey)
-            case .qwen:      models = await ClaudeService.fetchOpenAICompatibleModels(baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey: apiKey)
-            case .moonshot:  models = await ClaudeService.fetchOpenAICompatibleModels(baseURL: "https://api.moonshot.cn/v1", apiKey: apiKey)
-            case .ollama, .lmstudio, .custom: models = []  // handled above
-            }
+            let result = await ProviderCatalog.fetchModels(for: provider, in: self)
             loadingProviderModels.remove(provider)
-            if models.isEmpty {
-                providerModelFetchError[provider] = "Failed to load models. Check your API key."
-            } else {
+            if case .success(let models) = result, !models.isEmpty {
                 fetchedProviderModels[provider] = models
-                switch provider {
-                case .anthropic:
-                    if !models.contains(where: { $0.id == claudeModel }) {
-                        claudeModel = models.first(where: { $0.id.contains("sonnet") })?.id ?? models.first!.id
-                    }
-                case .google:
-                    if !models.contains(where: { $0.id == googleChatModel }) {
-                        googleChatModel = models.first(where: { $0.id.contains("flash") })?.id ?? models.first!.id
-                    }
-                case .openai:
-                    if !models.contains(where: { $0.id == openAIChatModel }) {
-                        openAIChatModel = models.first(where: { $0.id.contains("mini") })?.id ?? models.first!.id
-                    }
-                case .deepseek:
-                    if !models.contains(where: { $0.id == deepseekChatModel }) {
-                        deepseekChatModel = models.first!.id
-                    }
-                case .qwen:
-                    if !models.contains(where: { $0.id == qwenChatModel }) {
-                        qwenChatModel = models.first!.id
-                    }
-                case .moonshot:
-                    if !models.contains(where: { $0.id == moonshotChatModel }) {
-                        moonshotChatModel = models.first!.id
-                    }
-                case .ollama, .lmstudio, .custom: break
+                if !models.contains(where: { $0.id == ProviderCatalog.chatModel(for: provider, in: self) }) {
+                    ProviderCatalog.setChatModel(
+                        ProviderCatalog.preferredModel(for: provider, in: models)!, for: provider, in: self)
                 }
+            } else {
+                providerModelFetchError[provider] = "Failed to load models. Check your API key."
             }
         }
     }
 
     /// The model currently active for chat (provider-aware).
     var activeChatModel: String {
-        switch chatProvider {
-        case .anthropic: return claudeModel
-        case .google:    return googleChatModel
-        case .openai:    return openAIChatModel
-        case .ollama:    return ollamaChatModel
-        case .lmstudio:  return lmstudioChatModel
-        case .deepseek:  return deepseekChatModel
-        case .qwen:      return qwenChatModel
-        case .moonshot:  return moonshotChatModel
-        case .custom:    return customChatModel
-        }
+        ProviderCatalog.chatModel(for: chatProvider, in: self)
     }
 
     // Sound volume (0–0.2) — persisted, synced to SoundEngine

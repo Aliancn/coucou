@@ -1593,17 +1593,7 @@ struct ModelPickerView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(models, id: \.id) { model in
                         Button {
-                            switch state.chatProvider {
-                            case .anthropic: state.claudeModel = model.id
-                            case .google:    state.googleChatModel = model.id
-                            case .openai:    state.openAIChatModel = model.id
-                            case .ollama:    state.ollamaChatModel = model.id
-                            case .lmstudio:  state.lmstudioChatModel = model.id
-                            case .deepseek:  state.deepseekChatModel = model.id
-                            case .qwen:      state.qwenChatModel = model.id
-                            case .moonshot:  state.moonshotChatModel = model.id
-                            case .custom:    state.customChatModel = model.id
-                            }
+                            ProviderCatalog.setChatModel(model.id, for: state.chatProvider, in: state)
                             isPresented = false
                             SoundEngine.shared.play("blip")
                         } label: {
@@ -2019,16 +2009,9 @@ struct IntegrationCardView: View {
             if task.id == "agent_claude-desktop" { return String(localized: "Ready · no setup needed") }
             if isAI {
                 let provider = ChatProvider(pillID: task.id)!
+                let model = ProviderCatalog.chatModel(for: provider, in: appState)
                 if provider.isLocal {
-                    let model = provider == .ollama ? appState.ollamaChatModel : appState.lmstudioChatModel
                     return String(localized: "Connected · \(model)")
-                }
-                let model: String
-                switch task.id {
-                case "ai_anthropic": model = appState.claudeModel
-                case "ai_google":    model = appState.googleChatModel
-                case "ai_openai":    model = appState.openAIChatModel
-                default:             model = ""
                 }
                 return String(localized: "Key configured · \(model)")
             }

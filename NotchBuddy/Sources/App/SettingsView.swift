@@ -233,7 +233,12 @@ struct SettingsView: View {
             guard fetchedModels.isEmpty,
                   let key = KeychainStore.shared.get("anthropic-api-key"), !key.isEmpty else { return }
             Task {
-                let models = await ClaudeService.fetchModels(apiKey: key)
+                let models: [(id: String, label: String)]
+                if case .success(let list) = await ProviderCatalog.fetchModels(for: .anthropic, in: state) {
+                    models = list
+                } else {
+                    models = []
+                }
                 guard !models.isEmpty else { return }
                 await MainActor.run {
                     fetchedModels = models

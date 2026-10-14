@@ -36,7 +36,7 @@ final class MockClient: LLMClient, @unchecked Sendable {
         AsyncThrowingStream { $0.finish(throwing: BrainError.network("not implemented")) }
     }
 
-    func listModels() async throws -> [String] { [] }
+    func listModels() async throws -> [ModelListing] { [] }
 
     var callCount: Int { lock.withLock { requests.count } }
 }
