@@ -123,9 +123,13 @@ final class ClaudeService {
         """
     }
 
-    private let webSearchTools: [[String: Any]] = [
-        ["type": "web_search_20250305", "name": "web_search", "max_uses": 5]
-    ]
+    /// Chat's web search, in the engine's declaration form — serializes to
+    /// the flat provider JSON: {type, name, max_uses}.
+    private let webSearchTool = ToolDeclaration(
+        name: "web_search",
+        description: "",
+        inputSchema: ["max_uses": .number(5)],
+        serverType: "web_search_20250305")
 
     // MARK: - Chat (multi-turn, natural text + web search)
 
@@ -166,20 +170,25 @@ final class ClaudeService {
 
         conversationMessages.append(["role": "user", "content": userContent])
 
-        let body: [String: Any] = [
-            "model": model,
-            "max_tokens": 4096,
-            "tools": webSearchTools,
-            "system": systemPrompt,
-            "messages": conversationMessages,
-        ]
+        let client = AnthropicClient(endpoint: ModelEndpoint(
+            baseURL: "https://api.anthropic.com/v1",
+            dialect: .anthropicMessages,
+            apiKey: key,
+            model: model))
+        let request = CompletionRequest(
+            system: systemPrompt,
+            messages: AnthropicConverter.brainMessages(fromConversationJSON: conversationMessages),
+            tools: [webSearchTool],
+            maxTokens: 4096,
+            betas: ["web-search-2025-03-05"],
+            timeout: 45)
 
         do {
-            let data = try await callAPI(body: body, key: key, beta: "web-search-2025-03-05")
-            await handleChatResult(data, state: state)
+            let response = try await client.complete(request)
+            await handleChatResult(response, state: state)
         } catch {
             conversationMessages.removeLast()
-            await showError(error.localizedDescription, state: state)
+            await showError(Self.chatErrorMessage(for: error), state: state)
         }
     }
 
@@ -544,14 +553,9 @@ final class ClaudeService {
 
     // MARK: - Chat result handler
 
-    private func handleChatResult(_ data: Data, state: AppState) async {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let content = json["content"] as? [[String: Any]] else {
-            await showError("Unexpected API response.", state: state)
-            return
-        }
-
+    private func handleChatResult(_ response: CompletionResponse, state: AppState) async {
         // Store full content (includes tool_use/tool_result blocks) for correct multi-turn context
+        let content = Self.contentArray(from: response)
         conversationMessages.append(["role": "assistant", "content": content])
 
         guard let text = claudeResponseText(fromContent: content) else {
@@ -621,6 +625,37 @@ final class ClaudeService {
         state.stateOverride = .error
         state.noteMessage = message
         state.view = .note
+    }
+
+    /// The engine's errors, shown with the exact messages the old inline
+    /// chat path produced.
+    private static func chatErrorMessage(for error: Error) -> String {
+        switch error {
+        case BrainError.modelNotFound:
+            // Reads the Settings field (untrimmed), like the old callAPI did.
+            return "Model not found: \(AppState.shared.claudeModel). Pick another one in Settings."
+        case BrainError.http(_, let body):
+            return body
+        case BrainError.network(let message):
+            return message
+        case BrainError.emptyResponse:
+            return "Unexpected API response."
+        case BrainError.cancelled:
+            return "cancelled"
+        default:
+            return error.localizedDescription
+        }
+    }
+
+    /// The response's content array back in raw form — what the conversation
+    /// storage holds (rawBlocksJSON is the response's content verbatim).
+    private static func contentArray(from response: CompletionResponse) -> [[String: Any]] {
+        if let raw = response.rawBlocksJSON,
+           let data = raw.data(using: .utf8),
+           let content = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            return content
+        }
+        return response.blocks.compactMap(AnthropicConverter.blockJSON)
     }
 
     // MARK: - File content block builder

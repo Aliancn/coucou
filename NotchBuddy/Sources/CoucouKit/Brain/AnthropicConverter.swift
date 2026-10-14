@@ -108,12 +108,23 @@ enum AnthropicConverter {
 
     /// One response content block, or nil for what the canonical model has no
     /// use for (thinking, redacted_thinking, future types). Dropped here does
-    /// not mean lost: rawBlocksJSON still carries it back.
+    /// not mean lost: rawBlocksJSON still carries it back. Also parses the
+    /// user-side block forms (image, document) — the chat history the App
+    /// layer stores holds both.
     static func block(fromJSON json: [String: Any]) -> BrainMessage.Block? {
         switch json["type"] as? String {
         case "text":
             guard let text = json["text"] as? String else { return nil }
             return .text(text)
+        case "image", "document":
+            guard let source = json["source"] as? [String: Any],
+                  source["type"] as? String == "base64",
+                  let mediaType = source["media_type"] as? String,
+                  let data = source["data"] as? String else { return nil }
+            if json["type"] as? String == "image" {
+                return .image(mediaType: mediaType, base64: data)
+            }
+            return .document(mediaType: mediaType, base64: data)
         case "tool_use":
             guard let id = json["id"] as? String, let name = json["name"] as? String else { return nil }
             return .toolUse(id: id, name: name, inputJSON: canonicalJSONString(from: json["input"] ?? [:]) ?? "{}")
@@ -125,6 +136,27 @@ enum AnthropicConverter {
             return .webSearchToolResult(id: id, rawJSON: canonicalJSONString(from: json) ?? "{}")
         default:
             return nil
+        }
+    }
+
+    // MARK: Stored-history bridge (P2 only)
+
+    /// The App layer's conversation storage, still Anthropic-shaped raw JSON
+    /// during the migration. Assistant turns replay verbatim through
+    /// rawBlocksJSON; user turns rebuild from blocks (a string content becomes
+    /// a single text block — semantically equivalent on the wire). Deleted
+    /// once ChatPolicy owns a [BrainMessage] history (P3a).
+    static func brainMessages(fromConversationJSON messages: [[String: Any]]) -> [BrainMessage] {
+        messages.map { message in
+            let role: BrainMessage.Role = (message["role"] as? String) == "assistant" ? .assistant : .user
+            if let content = message["content"] as? String {
+                return BrainMessage(role: role, blocks: [.text(content)])
+            }
+            let content = (message["content"] as? [[String: Any]]) ?? []
+            if role == .assistant {
+                return assistantMessage(fromContentJSON: content)
+            }
+            return BrainMessage(role: role, blocks: content.compactMap(block(fromJSON:)))
         }
     }
 
