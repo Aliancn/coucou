@@ -20,7 +20,6 @@ struct IslandViewContent: View {
         case .choose:    ChooseView(state: state)
         case .mail:      MailView(state: state)
         case .prompt:    PromptView(state: state)
-        case .result:    ResultView(state: state)
         case .note:      NoteView(state: state)
         case .settings:  SettingsIslandView(state: state)
         case .greeting:  EmptyView()  // GreetingCanvasView overlaid in IslandRootView
@@ -1684,61 +1683,6 @@ struct TypingDotsView: View {
         }
         .padding(.horizontal, 2).padding(.vertical, 4)
         .onAppear { phase = true }
-    }
-}
-
-// MARK: - Result
-
-struct ResultView: View {
-    @ObservedObject var state: AppState
-
-    var body: some View {
-        ZStack(alignment: .leading) {
-            CardBackground(wash: .green)
-
-            if let result = state.searchResult {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text(result.title)
-                        .font(.system(size: 15, weight: .semibold))
-
-                    VStack(spacing: 4) {
-                        ForEach(result.items.prefix(3), id: \.label) { item in
-                            HStack {
-                                Text(item.label).font(.system(size: 12.5, weight: .semibold))
-                                Spacer()
-                                Text(item.detail).font(.system(size: 12.5)).foregroundColor(Color(hex: "#9398A1"))
-                            }
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(Color.white.opacity(0.05))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-                    }
-
-                    if let note = result.note {
-                        Text(note).font(.system(size: 11)).foregroundColor(Color(hex: "#6E737C"))
-                    }
-
-                    HStack(spacing: 8) {
-                        // The URL comes from the model, which may have read attacker-controlled
-                        // files or pages: only plain web links may leave the app.
-                        let openURL = safeWebURL(result.items.first?.url)
-                        PrimaryButton("Open") {
-                            if let openURL { NSWorkspace.shared.open(openURL) }
-                        }
-                        .disabled(openURL == nil)
-                        .help(openURL?.absoluteString ?? "")
-                        SecondaryButton("Copy") {
-                            let text = result.items.map { "\($0.label): \($0.detail)" }.joined(separator: "\n")
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(text, forType: .string)
-                        }
-                        SecondaryButton("Close") { state.view = state.tasks.isEmpty ? .empty : .overview }
-                    }
-                }
-                .padding(.leading, 84)
-                .padding(.trailing, 16)
-            }
-        }
     }
 }
 

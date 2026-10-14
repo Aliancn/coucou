@@ -353,9 +353,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    // Pending API result
-    @Published var searchResult: SearchResult? = nil
-
     // Vercel deployments (populated by VercelPoller)
     @Published var vercelDeployments: [VercelDeployment] = []
 
@@ -763,18 +760,6 @@ struct VoiceMailDraft: Equatable {
 struct DroppedFile {
     var url: URL
     var name: String
-}
-
-struct SearchResult {
-    var title: String
-    var items: [ResultItem]
-    var note: String?
-}
-
-struct ResultItem {
-    var label: String
-    var detail: String
-    var url: String?
 }
 
 // MARK: - Vercel
