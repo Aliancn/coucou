@@ -1,0 +1,42 @@
+{
+  "id": "msg_websearch_error_fixture",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-4-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "I'll search for that."
+    },
+    {
+      "type": "server_tool_use",
+      "id": "srvtoolu_fixture_03",
+      "name": "web_search",
+      "input": {
+        "query": "breaking news"
+      }
+    },
+    {
+      "type": "web_search_tool_result",
+      "tool_use_id": "srvtoolu_fixture_03",
+      "content": {
+        "type": "web_search_tool_result_error",
+        "error_code": "tool_use_processing_error"
+      }
+    },
+    {
+      "type": "text",
+      "text": "Sorry — the search failed just now. Ask me again in a moment."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 401,
+    "output_tokens": 88,
+    "server_tool_use": {
+      "web_search_requests": 1,
+      "web_search_error_count": 1
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": "msg_websearch_pause_fixture",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-4-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "Let me look that up."
+    },
+    {
+      "type": "server_tool_use",
+      "id": "srvtoolu_fixture_02",
+      "name": "web_search",
+      "input": {
+        "query": "Olympic medal count"
+      }
+    }
+  ],
+  "stop_reason": "pause_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 389,
+    "output_tokens": 42,
+    "server_tool_use": {
+      "web_search_requests": 1
+    }
+  }
+}

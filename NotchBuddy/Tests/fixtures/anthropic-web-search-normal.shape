@@ -1,0 +1,1 @@
+{"blocks":[{"type":"text"},{"id":"srvtoolu_fixture_","name":"web_search","type":"server_tool_use"},{"result_count":2,"tool_use_id":"srvtoolu_fixture_","type":"web_search_tool_result"},{"citation_count":1,"type":"text"},{"citation_count":1,"type":"text"}],"stop_reason":"end_turn"}

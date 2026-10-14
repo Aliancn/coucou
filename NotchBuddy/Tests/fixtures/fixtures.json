@@ -1,0 +1,51 @@
+{
+  "recorded": "2026-10-14",
+  "source": "bifrost v2.2.6 (dc-alice-r, http://localhost:14001), model sgl/glm-5.3-flash",
+  "fixtures": {
+    "anthropic-text.json": {
+      "dialect": "anthropic-messages",
+      "kind": "recorded",
+      "note": "thinking + text blocks, end_turn (glm is a thinking model — exercises thinking-block filtering)"
+    },
+    "anthropic-tool-use.json": {
+      "dialect": "anthropic-messages",
+      "kind": "recorded",
+      "note": "thinking + tool_use blocks, stop_reason tool_use, arguments as canonical JSON"
+    },
+    "anthropic-web-search-normal.json": {
+      "dialect": "anthropic-messages",
+      "kind": "hand-built",
+      "note": "web-search shape from Anthropic's documented format (bifrost cannot run server-side tools): server_tool_use + web_search_tool_result (array with encrypted_index) + citations splitting the text"
+    },
+    "anthropic-web-search-pause.json": {
+      "dialect": "anthropic-messages",
+      "kind": "hand-built",
+      "note": "stop_reason pause_turn, server_tool_use without its result yet"
+    },
+    "anthropic-web-search-error.json": {
+      "dialect": "anthropic-messages",
+      "kind": "hand-built",
+      "note": "HTTP 200, web_search_tool_result.content is a single web_search_tool_result_error object, NOT an array"
+    },
+    "openai-text.json": {
+      "dialect": "openai-chat",
+      "kind": "recorded",
+      "note": "non-streaming, finish_reason stop"
+    },
+    "openai-tool-use.json": {
+      "dialect": "openai-chat",
+      "kind": "recorded",
+      "note": "finish_reason tool_calls, function.arguments is a JSON string kept verbatim"
+    },
+    "openai-sse-stream.txt": {
+      "dialect": "openai-chat",
+      "kind": "recorded",
+      "note": "real SSE: empty-string content first chunk, reasoning_content deltas (content null) ignored, finish_reason tail chunk, [DONE]"
+    },
+    "openai-sse-fake-local.txt": {
+      "dialect": "openai-chat",
+      "kind": "transcribed",
+      "note": "the event set of tests/fake_local_llm.py: think block split over two chunks, reasoning-only delta, [DONE]"
+    }
+  }
+}

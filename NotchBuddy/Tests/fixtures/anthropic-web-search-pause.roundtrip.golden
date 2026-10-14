@@ -1,0 +1,1 @@
+[{"text":"Let me look that up.","type":"text"},{"id":"srvtoolu_fixture_02","input":{"query":"Olympic medal count"},"name":"web_search","type":"server_tool_use"}]

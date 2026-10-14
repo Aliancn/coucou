@@ -94,6 +94,16 @@ schemes:
       config: Debug
     archive:
       config: Release
+  # Unit tests for Sources/CoucouKit/Brain (the pluggable LLM layer).
+  # Pinned to Debug: Release would try Developer ID signing.
+  BrainTests:
+    build:
+      targets:
+        BrainTests: all
+    test:
+      config: Debug
+      targets:
+        - BrainTests
   # Same iPhone app on the Production CloudKit environment, to talk to the
   # Developer ID build (scripts/cloud-test-build.sh), which can only use Production.
   CoucouPhoneProduction:
@@ -388,6 +398,21 @@ targets:
         OTHER_CODE_SIGN_FLAGS: ""
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
+
+  # Unit tests for Sources/CoucouKit/Brain: converters, tool-use loop,
+  # golden fixtures. HermesConfigMergerTests.swift is a top-level script
+  # (not an XCTest case), so it stays out of the target.
+  BrainTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Sources/CoucouKit/Brain
+      - path: Tests
+        excludes:
+          - "HermesConfigMergerTests.swift"
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
 
   # The expanded approval notification: Mochi alive, with the command.
   CoucouNotificationContent:

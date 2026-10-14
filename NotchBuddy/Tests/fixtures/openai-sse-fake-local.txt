@@ -1,0 +1,18 @@
+data: {"choices": [{"delta": {"content": "<think>\nstep "}}]}
+
+data: {"choices": [{"delta": {"content": "one\n</think>"}}]}
+
+data: {"choices": [{"delta": {"content": null, "reasoning_content": "internal"}}]}
+
+data: {"choices": [{"delta": {"content": "## Answer\n\n"}}]}
+
+data: {"choices": [{"delta": {"content": "Here is the result:\n\n"}}]}
+
+data: {"choices": [{"delta": {"content": "- **item 1**\n"}}]}
+
+data: {"choices": [{"delta": {"content": "- item 2\n\n"}}]}
+
+data: {"choices": [{"delta": {"content": "```python\nprint('hello')\n```"}}]}
+
+data: [DONE]
+
