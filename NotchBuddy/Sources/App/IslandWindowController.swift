@@ -1574,12 +1574,12 @@ extension IslandWindowController {
 
         // Web search on (Settings → Voice): a question no pill or service answers goes to
         // Claude with web search, and so does the reply to its own follow-up question.
-        if case .unknown = intent, runner.info.webSearchEnabled, runner.info.hasWebKey,
+        if case .unknown = intent, runner.info.webSearchEnabled, runner.info.canWebAnswer,
            VoiceQuery.looksLikeQuestion(transcript) || (isInConversation && runner.hasWebThread) {
             intent = .webSearch(query: transcript)
         }
         if case .webSearch(let q) = intent, !q.isEmpty,
-           runner.info.webSearchEnabled, runner.info.hasWebKey, VoiceSettings.speakEnabled {
+           runner.info.webSearchEnabled, runner.info.canWebAnswer, VoiceSettings.speakEnabled {
             // A web search takes a few seconds: say so instead of going quiet.
             VoiceSpeaker.shared.onDidFinish = nil
             let wait = VoiceSettings.language == "fr" ? "Je regarde." : "Let me check."

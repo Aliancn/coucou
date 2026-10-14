@@ -96,6 +96,7 @@ struct SettingsView: View {
     @State private var customURL:    String = AppState.shared.customChatBaseURL
     @State private var customKey:    String = KeychainStore.shared.get("custom-api-key") ?? ""
     @State private var customEndpointModel: String = AppState.shared.customChatModel
+    @State private var exaKey:       String = KeychainStore.shared.get("exa-api-key") ?? ""
     @State private var connectingOllama:    Bool = false
     @State private var connectingLMStudio:  Bool = false
 
@@ -1018,7 +1019,7 @@ struct SettingsView: View {
                 SecureField(String(localized: "chat.api-key.claude"), text: $apiKey)
                     .textFieldStyle(.roundedBorder)
                 Button(String(localized: "Save")) {
-                    KeychainStore.shared.set("anthropic-api-key", value: apiKey)
+                    KeychainStore.shared.set(ChatProvider.anthropic.keychainKey, value: apiKey)
                     statusMessage = String(localized: "status.key-saved")
                 }
                 .buttonStyle(.borderedProminent)
@@ -1059,13 +1060,13 @@ struct SettingsView: View {
                     .foregroundColor(.secondary)
 
                 HStack(spacing: 8) {
-                    Circle().fill(Color(hex: "#4285F4")).frame(width: 8, height: 8)
+                    Circle().fill(Color(hex: ChatProvider.google.accentHex)).frame(width: 8, height: 8)
                     Text(String(localized: "chat.google-ai")).font(.system(size: 12, weight: .semibold))
                 }
                 SecureField(String(localized: "chat.api-key.google"), text: $googleKey)
                     .textFieldStyle(.roundedBorder)
                 Button(String(localized: "Save")) {
-                    KeychainStore.shared.set("google-api-key", value: googleKey)
+                    KeychainStore.shared.set(ChatProvider.google.keychainKey, value: googleKey)
                     statusMessage = String(localized: "status.google-key-saved")
                 }
                 .buttonStyle(.borderedProminent)
@@ -1073,13 +1074,13 @@ struct SettingsView: View {
                 Divider()
 
                 HStack(spacing: 8) {
-                    Circle().fill(Color(hex: "#10A37F")).frame(width: 8, height: 8)
+                    Circle().fill(Color(hex: ChatProvider.openai.accentHex)).frame(width: 8, height: 8)
                     Text(String(localized: "chat.openai")).font(.system(size: 12, weight: .semibold))
                 }
                 SecureField(String(localized: "chat.api-key.openai"), text: $openAIKey)
                     .textFieldStyle(.roundedBorder)
                 Button(String(localized: "Save")) {
-                    KeychainStore.shared.set("openai-api-key", value: openAIKey)
+                    KeychainStore.shared.set(ChatProvider.openai.keychainKey, value: openAIKey)
                     statusMessage = String(localized: "status.openai-key-saved")
                 }
                 .buttonStyle(.borderedProminent)
@@ -1087,13 +1088,13 @@ struct SettingsView: View {
                 Divider()
 
                 HStack(spacing: 8) {
-                    Circle().fill(Color(hex: "#5B8FF9")).frame(width: 8, height: 8)
+                    Circle().fill(Color(hex: ChatProvider.deepseek.accentHex)).frame(width: 8, height: 8)
                     Text("DeepSeek").font(.system(size: 12, weight: .semibold))
                 }
                 SecureField("API key", text: $deepseekKey)
                     .textFieldStyle(.roundedBorder)
                 Button(String(localized: "Save")) {
-                    KeychainStore.shared.set("deepseek-api-key", value: deepseekKey)
+                    KeychainStore.shared.set(ChatProvider.deepseek.keychainKey, value: deepseekKey)
                     statusMessage = "DeepSeek key saved."
                 }
                 .buttonStyle(.borderedProminent)
@@ -1101,13 +1102,13 @@ struct SettingsView: View {
                 Divider()
 
                 HStack(spacing: 8) {
-                    Circle().fill(Color(hex: "#FF6A00")).frame(width: 8, height: 8)
+                    Circle().fill(Color(hex: ChatProvider.qwen.accentHex)).frame(width: 8, height: 8)
                     Text("Qwen (Alibaba)").font(.system(size: 12, weight: .semibold))
                 }
                 SecureField("API key", text: $qwenKey)
                     .textFieldStyle(.roundedBorder)
                 Button(String(localized: "Save")) {
-                    KeychainStore.shared.set("qwen-api-key", value: qwenKey)
+                    KeychainStore.shared.set(ChatProvider.qwen.keychainKey, value: qwenKey)
                     statusMessage = "Qwen key saved."
                 }
                 .buttonStyle(.borderedProminent)
@@ -1115,13 +1116,13 @@ struct SettingsView: View {
                 Divider()
 
                 HStack(spacing: 8) {
-                    Circle().fill(Color(hex: "#7C5CFC")).frame(width: 8, height: 8)
+                    Circle().fill(Color(hex: ChatProvider.moonshot.accentHex)).frame(width: 8, height: 8)
                     Text("Moonshot (Kimi)").font(.system(size: 12, weight: .semibold))
                 }
                 SecureField("API key", text: $moonshotKey)
                     .textFieldStyle(.roundedBorder)
                 Button(String(localized: "Save")) {
-                    KeychainStore.shared.set("moonshot-api-key", value: moonshotKey)
+                    KeychainStore.shared.set(ChatProvider.moonshot.keychainKey, value: moonshotKey)
                     statusMessage = "Moonshot key saved."
                 }
                 .buttonStyle(.borderedProminent)
@@ -1129,7 +1130,7 @@ struct SettingsView: View {
                 Divider()
 
                 HStack(spacing: 8) {
-                    Circle().fill(Color(hex: "#94A3B8")).frame(width: 8, height: 8)
+                    Circle().fill(Color(hex: ChatProvider.custom.accentHex)).frame(width: 8, height: 8)
                     Text("Custom (OpenAI-compatible)").font(.system(size: 12, weight: .semibold))
                 }
                 TextField("https://gateway.example.com/v1", text: $customURL)
@@ -1147,13 +1148,30 @@ struct SettingsView: View {
                     state.customChatBaseURL = base
                     customURL = base
                     state.customChatModel = customEndpointModel.trimmingCharacters(in: .whitespacesAndNewlines)
-                    KeychainStore.shared.set("custom-api-key", value: customKey)
+                    KeychainStore.shared.set(ChatProvider.custom.keychainKey, value: customKey)
                     state.fetchedProviderModels[.custom] = nil
                     state.providerModelFetchError.removeValue(forKey: .custom)
                     statusMessage = "Custom endpoint saved."
                 }
                 .buttonStyle(.borderedProminent)
                 Text("Any server that speaks the OpenAI Chat Completions API — LiteLLM, OpenRouter, a company gateway, a local vLLM. The model list loads in the chat's model picker.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+
+                Divider()
+
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: "#06B6D4")).frame(width: 8, height: 8)
+                    Text("Exa (web search)").font(.system(size: 12, weight: .semibold))
+                }
+                SecureField("API key (optional)", text: $exaKey)
+                    .textFieldStyle(.roundedBorder)
+                Button(String(localized: "Save")) {
+                    KeychainStore.shared.set("exa-api-key", value: exaKey)
+                    statusMessage = "Exa key saved."
+                }
+                .buttonStyle(.borderedProminent)
+                Text("Web search for the providers without their own (every chat provider but Anthropic) — powers voice web answers. Without it, those providers answer from what they know.")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -1168,7 +1186,7 @@ struct SettingsView: View {
 
                 // ── Ollama ──────────────────────────────────────────────────────
                 HStack(spacing: 8) {
-                    Circle().fill(Color(hex: "#FACC15")).frame(width: 8, height: 8)
+                    Circle().fill(Color(hex: ChatProvider.ollama.accentHex)).frame(width: 8, height: 8)
                     Text("Ollama").font(.system(size: 12, weight: .semibold))
                     if !state.ollamaServerURL.isEmpty {
                         Text(String(localized: "Connected"))
@@ -1203,7 +1221,7 @@ struct SettingsView: View {
 
                 // ── LM Studio ───────────────────────────────────────────────────
                 HStack(spacing: 8) {
-                    Circle().fill(Color(hex: "#A3E635")).frame(width: 8, height: 8)
+                    Circle().fill(Color(hex: ChatProvider.lmstudio.accentHex)).frame(width: 8, height: 8)
                     Text("LM Studio").font(.system(size: 12, weight: .semibold))
                     if !state.lmstudioServerURL.isEmpty {
                         Text(String(localized: "Connected"))
@@ -1395,7 +1413,7 @@ struct SettingsView: View {
     @AppStorage("voiceElevenGender")   private var elevenGender: String = "female"
     @AppStorage("voicePitchFemale")    private var pitchFemale: Double = VoiceSettings.defaultPitchFemale
     @AppStorage("voicePitchMale")      private var pitchMale: Double = VoiceSettings.defaultPitchMale
-    @State private var webKeySaved: Bool = !(KeychainStore.shared.get("anthropic-api-key") ?? "").isEmpty
+    @State private var webKeySaved: Bool = VoiceAnswerPolicy.isAvailable
     @State private var elevenKeyDraft: String = ""
     @State private var elevenKeySaved: Bool = KeychainStore.shared.get(ElevenLabsTTS.keyName) != nil
 
@@ -1426,7 +1444,7 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .onAppear { webKeySaved = !(KeychainStore.shared.get("anthropic-api-key") ?? "").isEmpty }
+                .onAppear { webKeySaved = VoiceAnswerPolicy.isAvailable }
 
                 if voiceEngine.recognizerUnavailable {
                     HStack(spacing: 6) {

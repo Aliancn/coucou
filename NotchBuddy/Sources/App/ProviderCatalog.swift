@@ -65,6 +65,78 @@ enum ProviderCatalog {
         return models.first?.id
     }
 
+    // MARK: - Chat endpoints
+
+    /// Why a provider's chat endpoint couldn't be resolved — the caller names
+    /// each case with its own message.
+    enum EndpointResolution {
+        case resolved(ModelEndpoint)
+        /// Local server not connected, or the Custom URL left empty.
+        case missingBaseURL
+        /// Remote provider without its API key.
+        case missingAPIKey
+        /// Custom endpoint without a picked model.
+        case missingModel
+    }
+
+    /// The chat endpoint for `provider`: where it lives on the wire, how it
+    /// authenticates, which model it runs. Local server URLs get their /v1
+    /// back (normaliseURL strips it for storage); the Custom URL is taken as
+    /// saved; remote presets are fixed.
+    static func chatEndpoint(for provider: ChatProvider, in state: AppState) -> EndpointResolution {
+        let apiKey = KeychainStore.shared.get(provider.keychainKey)
+        let baseURL: String
+        switch provider {
+        case .anthropic: baseURL = "https://api.anthropic.com/v1"
+        case .google:    baseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
+        case .openai:    baseURL = "https://api.openai.com/v1"
+        case .deepseek:  baseURL = "https://api.deepseek.com/v1"
+        case .qwen:      baseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        case .moonshot:  baseURL = "https://api.moonshot.cn/v1"
+        case .ollama, .lmstudio:
+            let normalised = localBaseURL(for: provider, in: state)
+            guard !normalised.isEmpty else { return .missingBaseURL }
+            baseURL = normalised + "/v1"
+        case .custom:
+            baseURL = state.customChatBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !baseURL.isEmpty else { return .missingBaseURL }
+        }
+        // Auth: local servers send nothing; custom endpoints authenticate
+        // optionally (empty key = no header); the others require a key.
+        let key: String?
+        if provider == .custom {
+            key = (apiKey?.isEmpty == false) ? apiKey : nil
+        } else if provider.isLocal {
+            key = nil
+        } else {
+            guard let apiKey, !apiKey.isEmpty else { return .missingAPIKey }
+            key = apiKey
+        }
+        // Model: Anthropic falls back to the default when Settings is empty;
+        // custom needs a picked model, everyone else runs its stored choice.
+        let model: String
+        if provider == .anthropic {
+            model = claudeModelOrDefault
+        } else {
+            model = chatModel(for: provider, in: state)
+            if provider == .custom, model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return .missingModel
+            }
+        }
+        return .resolved(ModelEndpoint(
+            baseURL: baseURL,
+            dialect: provider == .anthropic ? .anthropicMessages : .openaiChat,
+            apiKey: key,
+            model: model))
+    }
+
+    /// The Claude model as the chat and voice paths resolve it: the Settings
+    /// field, or the default when it is left empty.
+    static var claudeModelOrDefault: String {
+        let m = AppState.shared.claudeModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return m.isEmpty ? AppState.defaultClaudeModel : m
+    }
+
     // MARK: - Model list fetch
 
     /// Fetches `provider`'s model list the way its API expects (the engine's

@@ -106,4 +106,24 @@ final class BrainChatParityTests: XCTestCase {
         XCTAssertEqual(messages[1].blocks.count, 5)
         XCTAssertEqual(messages[2].blocks, [.text("Merci !")])
     }
+
+    /// The voice web-answer search tool serializes to the flat provider form
+    /// the old voiceAnswer body built: max_uses and user_location ride in
+    /// the schema, the serverType becomes the type.
+    func testVoiceSearchToolFlatForm() {
+        var location: [String: JSONValue] = ["type": .string("approximate"),
+                                             "timezone": .string("Europe/Paris")]
+        location["country"] = .string("FR")
+        let tool = ToolDeclaration(name: "web_search", description: "",
+                                   inputSchema: ["max_uses": .number(3),
+                                                 "user_location": .object(location)],
+                                   serverType: "web_search_20250305")
+        let json = AnthropicConverter.toolJSON(tool)
+        XCTAssertEqual(
+            canonicalJSONString(from: json),
+            canonicalJSONString(from: [
+                "type": "web_search_20250305", "name": "web_search", "max_uses": 3,
+                "user_location": ["type": "approximate", "timezone": "Europe/Paris",
+                                  "country": "FR"] as [String: Any]]))
+    }
 }

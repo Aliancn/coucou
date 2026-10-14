@@ -44,9 +44,9 @@ protocol VoiceInfoProviding {
     func draftBody(to recipient: String, about instruction: String) async -> String?
     /// Opens the island's mail card, filled in. Nothing is sent until I click Send.
     func showMailCard(to address: String, subject: String, body: String, file: URL?)
-    // Web search (Settings → Voice, opt-in, the user's Anthropic API key)
+    // Web search (Settings → Voice, opt-in, any configured chat provider)
     var webSearchEnabled: Bool { get }
-    var hasWebKey: Bool { get }
+    var canWebAnswer: Bool { get }
     /// A short spoken answer from Claude with web search; nil on any failure.
     func webAnswer(_ question: String, history: [VoiceWebTurn], french: Bool) async -> String?
 }
@@ -66,7 +66,7 @@ private final class NullInfo: VoiceInfoProviding {
     func draftBody(to recipient: String, about instruction: String) async -> String? { nil }
     func showMailCard(to address: String, subject: String, body: String, file: URL?) {}
     var webSearchEnabled: Bool { false }
-    var hasWebKey: Bool { false }
+    var canWebAnswer: Bool { false }
     func webAnswer(_ question: String, history: [VoiceWebTurn], french: Bool) async -> String? { nil }
 }
 
@@ -421,12 +421,12 @@ final class VoiceActionRunner {
     func resetWebThread() { webHistory = [] }
 
     func webSearch(_ query: String) async -> VoiceActionResult {
-        guard info.webSearchEnabled, info.hasWebKey else {
-            let msg = info.hasWebKey
+        guard info.webSearchEnabled, info.canWebAnswer else {
+            let msg = info.canWebAnswer
                 ? t("La recherche web est coupée. Active-la dans Réglages, Voix.",
                     "Web search is off. Turn it on in Settings, Voice.")
-                : t("Pour chercher sur internet, ajoute ta clé API Anthropic dans Réglages, puis active la recherche web dans Voix.",
-                    "To search the web, add your Anthropic API key in Settings, then turn on web search in Voice.")
+                : t("Pour chercher sur internet, ajoute une clé API dans Réglages → Discussion, puis active la recherche web dans Voix.",
+                    "To search the web, add a chat provider's API key in Settings → Chat, then turn on web search in Voice.")
             return .init(outcome: .failure, message: msg)
         }
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)

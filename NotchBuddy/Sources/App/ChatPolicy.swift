@@ -21,14 +21,6 @@ final class ChatPolicy {
         history = []
     }
 
-    /// Chosen in Settings; falls back to the default when the field is left empty.
-    private var model: String {
-        let m = AppState.shared.claudeModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        return m.isEmpty ? AppState.defaultClaudeModel : m
-    }
-
-    private var apiKey: String? { KeychainStore.shared.get(ChatProvider.anthropic.keychainKey) }
-
     /// Resolved once: NSFullUserName() is a system call, and the name cannot change under us
     /// while the app runs.
     private let systemPrompt = ChatPolicy.makeSystemPrompt()
@@ -70,9 +62,15 @@ final class ChatPolicy {
             await chatOpenAICompatible(query: query, context: context, state: state)
             return
         }
-        guard let key = apiKey, !key.isEmpty else {
+        let endpoint: ModelEndpoint
+        switch ProviderCatalog.chatEndpoint(for: .anthropic, in: state) {
+        case .resolved(let resolved):
+            endpoint = resolved
+        case .missingAPIKey:
             await showError("API key missing. Open settings.", state: state)
             return
+        case .missingBaseURL, .missingModel:
+            return   // unreachable for the fixed Anthropic preset
         }
 
         // Build user content for this turn
@@ -96,11 +94,7 @@ final class ChatPolicy {
 
         history.append(BrainMessage(role: .user, blocks: userBlocks))
 
-        let client = AnthropicClient(endpoint: ModelEndpoint(
-            baseURL: "https://api.anthropic.com/v1",
-            dialect: .anthropicMessages,
-            apiKey: key,
-            model: model))
+        let client = AnthropicClient(endpoint: endpoint)
         let request = CompletionRequest(
             system: systemPrompt,
             messages: history,
@@ -124,27 +118,14 @@ final class ChatPolicy {
         let provider = state.chatProvider
         guard provider != .anthropic else { return }
 
-        // Full prefix including /v1 — normaliseURL strips it for storage,
-        // LocalChat and the endpoints expect it back.
-        let baseURL: String
-        if provider == .ollama {
-            baseURL = LocalChat.normaliseURL(state.ollamaServerURL) + "/v1"
-        } else if provider == .lmstudio {
-            baseURL = LocalChat.normaliseURL(state.lmstudioServerURL) + "/v1"
-        } else if provider == .custom {
-            baseURL = state.customChatBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        } else {
-            switch provider {
-            case .google:    baseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
-            case .openai:    baseURL = "https://api.openai.com/v1"
-            case .deepseek:  baseURL = "https://api.deepseek.com/v1"
-            case .qwen:      baseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-            case .moonshot:  baseURL = "https://api.moonshot.cn/v1"
-            case .anthropic, .ollama, .lmstudio, .custom: baseURL = ""
-            }
-        }
-
-        guard !baseURL.isEmpty else {
+        // Where the provider lives on the wire, how it authenticates, which
+        // model it runs — one catalog switch, the failure cases keep their
+        // exact messages.
+        let endpoint: ModelEndpoint
+        switch ProviderCatalog.chatEndpoint(for: provider, in: state) {
+        case .resolved(let resolved):
+            endpoint = resolved
+        case .missingBaseURL:
             if provider.isLocal {
                 let name = provider == .ollama ? "Ollama" : "LM Studio"
                 await showError("Connect \(name) in Settings → Chat first.", state: state)
@@ -152,28 +133,16 @@ final class ChatPolicy {
                 await showError("Set a Custom endpoint in Settings → Chat first.", state: state)
             }
             return
-        }
-        guard let url = URL(string: "\(baseURL)/chat/completions") else { return }
-        if provider == .custom, state.activeChatModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        case .missingAPIKey:
+            await showError("\(provider.displayName) API key missing. Configure it in Settings.", state: state)
+            return
+        case .missingModel:
             await showError("Pick a model for the Custom endpoint in Settings → Chat.", state: state)
             return
         }
-
-        // Auth: local servers send nothing; custom endpoints authenticate
-        // optionally (empty key = no header); the others require a key.
-        let apiKey: String?
-        if provider == .custom {
-            let key = KeychainStore.shared.get(provider.keychainKey) ?? ""
-            apiKey = key.isEmpty ? nil : key
-        } else if provider.isLocal {
-            apiKey = nil
-        } else {
-            guard let key = KeychainStore.shared.get(provider.keychainKey), !key.isEmpty else {
-                await showError("\(provider.displayName) API key missing. Configure it in Settings.", state: state)
-                return
-            }
-            apiKey = key
-        }
+        let baseURL = endpoint.baseURL
+        guard let url = URL(string: "\(baseURL)/chat/completions") else { return }
+        let apiKey = endpoint.apiKey
 
         // Build messages. Known degradation (pinned, replaced by tool-based
         // reading later): each history turn survives only through its first
@@ -225,7 +194,7 @@ final class ChatPolicy {
 
         let useStream = provider.isLocal || provider == .deepseek || provider == .qwen || provider == .moonshot || provider == .custom
         var body: [String: Any] = [
-            "model": state.activeChatModel,
+            "model": endpoint.model,
             "max_tokens": 4096,
             "messages": msgs,
         ]
@@ -245,7 +214,7 @@ final class ChatPolicy {
             let msgId = placeholder.id
             state.chatHistory.append(placeholder)
             state.stateOverride = .thinking
-            let modelCopy = state.activeChatModel
+            let modelCopy = endpoint.model
             let streamBody: [String: Any] = [
                 "model": modelCopy,
                 "messages": msgs,
