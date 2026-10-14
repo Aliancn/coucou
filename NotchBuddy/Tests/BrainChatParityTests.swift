@@ -1,10 +1,11 @@
 import XCTest
 
-// P2's acceptance: the chat path's switch from the inline Anthropic call to
-// AnthropicClient changes nothing on the wire. The old path built its body
-// from the stored conversation JSON verbatim; the new path converts through
-// brainMessages(fromConversationJSON:) → requestBody. Both eat the same
-// conversation and must produce the same canonical body, byte for byte.
+// The chat path's byte-parity red line. The old inline path built its body
+// from the stored conversation JSON verbatim; ChatPolicy now stores a
+// [BrainMessage] history (user turns built as blocks, assistant turns via
+// assistantMessage(fromContentJSON:) so rawBlocksJSON replays verbatim).
+// Both forms of the same conversation must produce the same canonical body,
+// byte for byte.
 
 final class BrainChatParityTests: XCTestCase {
 
@@ -43,6 +44,20 @@ final class BrainChatParityTests: XCTestCase {
         return conversation
     }
 
+    /// The same conversation as ChatPolicy's [BrainMessage] history: user
+    /// turns as blocks, assistant turns through assistantMessage(fromContentJSON:)
+    /// — exactly how chat() and handleChatResult() append.
+    private func chatPolicyHistory(_ conversation: [[String: Any]]) -> [BrainMessage] {
+        conversation.map { message in
+            let role: BrainMessage.Role = (message["role"] as? String) == "assistant" ? .assistant : .user
+            let content = (message["content"] as? [[String: Any]]) ?? []
+            if role == .assistant {
+                return AnthropicConverter.assistantMessage(fromContentJSON: content)
+            }
+            return BrainMessage(role: role, blocks: content.compactMap(AnthropicConverter.block(fromJSON:)))
+        }
+    }
+
     /// The body the old inline chat path built: the stored conversation
     /// verbatim, with the flat web-search tool.
     private func oldBody(_ conversation: [[String: Any]]) -> [String: Any] {
@@ -55,11 +70,11 @@ final class BrainChatParityTests: XCTestCase {
         ]
     }
 
-    /// The body the new path builds through the engine.
+    /// The body ChatPolicy builds through the engine.
     private func newBody(_ conversation: [[String: Any]]) -> [String: Any] {
         let request = CompletionRequest(
             system: "Tu es Mochi.",
-            messages: AnthropicConverter.brainMessages(fromConversationJSON: conversation),
+            messages: chatPolicyHistory(conversation),
             tools: [ToolDeclaration(name: "web_search", description: "",
                                     inputSchema: ["max_uses": .number(5)],
                                     serverType: "web_search_20250305")],
@@ -80,29 +95,15 @@ final class BrainChatParityTests: XCTestCase {
         XCTAssertEqual(old, new)
     }
 
-    /// Every message of the conversation survives the bridge — nothing
-    /// dropped, order kept, roles kept.
-    func testBridgeKeepsEveryTurn() throws {
-        let messages = AnthropicConverter.brainMessages(fromConversationJSON: try storedConversation())
+    /// Every message of the conversation survives — nothing dropped, order
+    /// kept, roles kept.
+    func testHistoryKeepsEveryTurn() throws {
+        let messages = chatPolicyHistory(try storedConversation())
         XCTAssertEqual(messages.map(\.role), [.user, .assistant, .user, .assistant])
         // First user turn: document + image + two texts.
         XCTAssertEqual(messages[0].blocks.count, 4)
         // Web-search assistant turn: text + server_tool_use + result + 2 cited texts.
         XCTAssertEqual(messages[1].blocks.count, 5)
         XCTAssertEqual(messages[2].blocks, [.text("Merci !")])
-    }
-
-    /// The one documented wire deviation (P1 leftover note): a stored
-    /// string-content message — the OpenAI path's storage form — becomes a
-    /// single text block on the Anthropic wire. Semantically equivalent.
-    func testStringContentBecomesSingleTextBlock() {
-        let messages = AnthropicConverter.brainMessages(fromConversationJSON: [
-            ["role": "user", "content": "bonjour"],
-            ["role": "assistant", "content": "salut"],
-        ])
-        XCTAssertEqual(messages.map(\.blocks), [[.text("bonjour")], [.text("salut")]])
-        let wire = messages.map(AnthropicConverter.messageJSON)
-        XCTAssertEqual(canonicalJSONString(from: wire[0]["content"]!),
-                       canonicalJSONString(from: [["type": "text", "text": "bonjour"]]))
     }
 }

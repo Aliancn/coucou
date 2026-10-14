@@ -1441,7 +1441,7 @@ struct PromptView: View {
             guard state.view == .prompt else { return }
             text = ""
             state.chatHistory = []
-            ClaudeService.shared.clearConversation()
+            ChatPolicy.shared.reset()
             focused = true
         }
     }
@@ -1464,7 +1464,7 @@ struct PromptView: View {
         state.chatHistory.append(ChatMessage(role: .user, content: query))
         state.stateOverride = .thinking
         Task {
-            await ClaudeService.shared.chat(query: query, context: state.promptContext, state: state)
+            await ChatPolicy.shared.chat(query: query, context: state.promptContext, state: state)
             await MainActor.run { focused = true }
         }
     }

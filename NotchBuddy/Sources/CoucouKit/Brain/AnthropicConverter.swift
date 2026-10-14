@@ -139,27 +139,6 @@ enum AnthropicConverter {
         }
     }
 
-    // MARK: Stored-history bridge (P2 only)
-
-    /// The App layer's conversation storage, still Anthropic-shaped raw JSON
-    /// during the migration. Assistant turns replay verbatim through
-    /// rawBlocksJSON; user turns rebuild from blocks (a string content becomes
-    /// a single text block — semantically equivalent on the wire). Deleted
-    /// once ChatPolicy owns a [BrainMessage] history (P3a).
-    static func brainMessages(fromConversationJSON messages: [[String: Any]]) -> [BrainMessage] {
-        messages.map { message in
-            let role: BrainMessage.Role = (message["role"] as? String) == "assistant" ? .assistant : .user
-            if let content = message["content"] as? String {
-                return BrainMessage(role: role, blocks: [.text(content)])
-            }
-            let content = (message["content"] as? [[String: Any]]) ?? []
-            if role == .assistant {
-                return assistantMessage(fromContentJSON: content)
-            }
-            return BrainMessage(role: role, blocks: content.compactMap(block(fromJSON:)))
-        }
-    }
-
     static func stopReason(_ raw: String?) -> StopReason {
         switch raw {
         case "end_turn": return .endTurn
