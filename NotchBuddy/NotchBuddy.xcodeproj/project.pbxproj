@@ -93,6 +93,7 @@
 		3451DB0668FAEEF09503D808 /* WakePhrase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12EC8F605BBC37F8223D7AA /* WakePhrase.swift */; };
 		352CD4E146AE486013366EC9 /* VoiceQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 654AF6918593586EFF1989C6 /* VoiceQuery.swift */; };
 		3638171614B45099ACAEDC56 /* LLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3397F9CC1F28DC327C0F9EB6 /* LLMClient.swift */; };
+		3683033CAD931EDFEACDC39F /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2562AA78A6A7866122B10DF /* KeychainStore.swift */; };
 		36EBFB9A047DEBAC43E5D0CC /* VoiceCaptionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A8FB03801C49690C3789EFD /* VoiceCaptionManager.swift */; };
 		37049A10D29B021685DC7A22 /* AnthropicConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9BE91312681291E762AE9BB /* AnthropicConverter.swift */; };
 		371520900EE323D101B2BEF1 /* openai-tool-use.json in Resources */ = {isa = PBXBuildFile; fileRef = DAD5F90D6590631C8F11670D /* openai-tool-use.json */; };
@@ -181,6 +182,7 @@
 		6E6FDBF5DEB97AC55B2CF473 /* anthropic-web-search-error.shape in Resources */ = {isa = PBXBuildFile; fileRef = 4003B41AE0A79165511ED1A1 /* anthropic-web-search-error.shape */; };
 		6EA96E94CB61C1BED2CE4752 /* anthropic-web-search-error.json in Resources */ = {isa = PBXBuildFile; fileRef = ABDA1E4294B6E8CD0D869E5C /* anthropic-web-search-error.json */; };
 		6EAB0C1A687802818C24054E /* AnthropicClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8B9D660CBDE4F25FC1D0B55 /* AnthropicClient.swift */; };
+		6F31F225939A8EF163DBCBC4 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2562AA78A6A7866122B10DF /* KeychainStore.swift */; };
 		6FC65C190ED614C664C9BC17 /* SafeWebURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2FDED98F7F6C755A72C97A3 /* SafeWebURL.swift */; };
 		714B5BB7FFB0C8491AF67AD1 /* VoiceTranscriptHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE925A6844FE3E3C09131CE0 /* VoiceTranscriptHistory.swift */; };
 		718410ED630AE3AC5DF59A95 /* VoiceSpeaker.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD11C7925B0A7831BFC2199C /* VoiceSpeaker.swift */; };
@@ -652,6 +654,7 @@
 		D0F0D0F67E7C56B9E37E7648 /* ClaudeHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHost.swift; sourceTree = "<group>"; };
 		D1A7C62058BB0C9D0DF58DCB /* VoiceIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceIntent.swift; sourceTree = "<group>"; };
 		D1D96E57E8DADE6B82628E3E /* OpenLeadMochiIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLeadMochiIntent.swift; sourceTree = "<group>"; };
+		D2562AA78A6A7866122B10DF /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		D4543CB771E0B723783F529E /* VoiceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceSettings.swift; sourceTree = "<group>"; };
 		D4C68B47B16FBA7F7E627DCC /* anthropic-web-search-normal.roundtrip.golden */ = {isa = PBXFileReference; path = "anthropic-web-search-normal.roundtrip.golden"; sourceTree = "<group>"; };
 		D6DF93125491729E14636AD8 /* CoucouNotificationContent.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = CoucouNotificationContent.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -777,6 +780,7 @@
 				D8212018F09EA1E96FBD63CD /* IslandStateMachine.swift */,
 				FA02B08886939FF6FE0475DD /* IslandViewContent.swift */,
 				D710BD7834228045869D0184 /* IslandWindowController.swift */,
+				D2562AA78A6A7866122B10DF /* KeychainStore.swift */,
 				8790ACE9F73BD74640A0F20C /* LocalChat.swift */,
 				6544ED02D945CF9F00647AD1 /* MacDictation.swift */,
 				8F2F18663F42A246DACCD639 /* MailController.swift */,
@@ -1350,6 +1354,7 @@
 				A7733EE60694EA3E2A86C37A /* IslandTypes.swift in Sources */,
 				065FCE817315454DE3F85F25 /* IslandViewContent.swift in Sources */,
 				091EC3B2F1060D7EE1317E4E /* IslandWindowController.swift in Sources */,
+				6F31F225939A8EF163DBCBC4 /* KeychainStore.swift in Sources */,
 				0878400D1F8F1193A04AD388 /* LLMClient.swift in Sources */,
 				C3ECA730677F467D28910AF6 /* LiveActivityRelay.swift in Sources */,
 				80D1CB884F0587EFCB839315 /* LiveVoiceControls.swift in Sources */,
@@ -1592,6 +1597,7 @@
 				0685C3D47D27D06FCB6E4AD1 /* IslandTypes.swift in Sources */,
 				68A950E3C23FD612639D9776 /* IslandViewContent.swift in Sources */,
 				C61DDE2EC5FDDB39E4AA3B34 /* IslandWindowController.swift in Sources */,
+				3683033CAD931EDFEACDC39F /* KeychainStore.swift in Sources */,
 				D8A143110D13561BFAEAC4A0 /* LLMClient.swift in Sources */,
 				F28275101D83F121E582B1B1 /* LiveActivityRelay.swift in Sources */,
 				AAECF326505B361B5F818150 /* LiveVoiceControls.swift in Sources */,
